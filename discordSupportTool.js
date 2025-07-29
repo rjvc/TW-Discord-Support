@@ -232,72 +232,31 @@ $.getScript(
         }
 
         // Render: Build the user interface
-        function buildUI() {
-            const content = `
-                <div class="ra-mb15">
-                    <table class="ra-table ra-table-v2" width="100%">
-                        <tbody>
-                            <tr>
-                                <td width="25%">
-                                    <b>${twSDK.tt('Village:')}</b>
-                                </td>
-                                <td id="raVillageInfo"></td>
-                            </tr>
-                            <tr>
-                                <td width="25%">
-                                    <b>${twSDK.tt('Wall level:')}</b>
-                                </td>
-                                <td id="raWallLevel"></td>
-                            </tr>
-                            <tr>
-                                <td width="25%">
-                                    <b>${twSDK.tt('Loyalty:')}</b>
-                                </td>
-                                <td id="raLoyalty"></td>
-                            </tr>
-                            <tr>
-                                <td width="25%">
-                                    <b>${twSDK.tt('Defender:')}</b>
-                                </td>
-                                <td id="raDefender"></td>
-                            </tr>
-                            <tr>
-                                <td width="25%">
-                                    <b>${twSDK.tt('Inc. Support:')}</b>
-                                </td>
-                                <td id="raIncomingSupport"></td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-                <div class="ra-mb15">
-                    <label class="ra-label" for="raSelectedText">${twSDK.tt(
-                        'Extracted Data'
-                    )}</label>
-                    <textarea class="ra-textarea" id="raSelectedText"></textarea>
-                </div>
-                <div class="ra-mb15">
-                    <a href="javascript:void(0);" id="raSendToDiscord" class="btn btn-disabled" data-village="">
-                        ${twSDK.tt('Send to Discord')}
-                    </a>
-                    <a href="javascript:void(0);" id="raResetBtn" class="btn" data-village="">
-                        ${twSDK.tt('Reset')}
-                    </a>
-                </div>
-            `;
+    function buildUI() {
+        const content = `
+        <div class="ra-mb15">
+            <table class="ra-table ra-table-v2" width="100%">
+                <tbody>
+                    <tr><td><b>${twSDK.tt('Village:')}</b></td><td id="raVillageInfo"></td></tr>
+                    <tr><td><b>${twSDK.tt('Wall level:')}</b></td><td id="raWallLevel"></td></tr>
+                    <tr><td><b>${twSDK.tt('Loyalty:')}</b></td><td id="raLoyalty"></td></tr>
+                    <tr><td><b>${twSDK.tt('Defender:')}</b></td><td id="raDefender"></td></tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="ra-mb15">
+            <label class="ra-label">${twSDK.tt('Extracted Data')}</label>
+            <textarea class="ra-textarea" id="raSelectedText"></textarea>
+        </div>
+        <div class="ra-mb15">
+            <a href="javascript:void(0);" id="raSendToDiscord" class="btn btn-disabled">${twSDK.tt('Send to Discord')}</a>
+            <a href="javascript:void(0);" id="raResetBtn" class="btn">${twSDK.tt('Reset')}</a>
+        </div>`;
 
-            const customStyle = `
-                .ra-label { font-weight: bold; margin-bottom: 6px; display: block; }
-            `;
+        const style = `.ra-label { font-weight: bold; margin-bottom: 6px; display: block; }`;
 
-            twSDK.renderFixedWidget(
-                content,
-                'raDiscordSupportTool',
-                'ra-discord-support-tool',
-                customStyle
-            );
-        }
-
+        twSDK.renderFixedWidget(content, 'raDiscordReqDefTool', 'ra-discord-reqdef-tool', style);
+    }
         // Event Handler: On text select event listener
         function handleOnTextSelect() {
             jQuery('.text').mouseup(async function (event) {
