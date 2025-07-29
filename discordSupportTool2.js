@@ -172,7 +172,7 @@ var scriptConfig = {
         },
     },
     allowedMarkets: ['en', 'us', 'fr', 'es', 'pt'],
-    allowedScreens: ['forum', 'reqdef'],
+    allowedScreens: ['reqdef'],
     allowedModes: [],
     isDebug: DEBUG,
     enableCountApi: true,
