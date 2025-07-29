@@ -69,7 +69,7 @@ var scriptConfig = {
             'Discord Support Tool': 'Discord Support Tool',
             Help: 'Ajuda',
             'Village:': 'Aldeia:',
-            'Wall level:': 'Nível da Muralha:',
+            'Wall level:': 'Nível da muralha:',
             'Loyalty:': 'Lealdade:',
             'Defender:': 'Defensor:',
             Noble: 'Nobre',
