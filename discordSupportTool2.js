@@ -186,7 +186,6 @@ $.getScript(
         const scriptInfo = twSDK.scriptInfo();
         const isValidScreen = twSDK.checkValidLocation('screen');
         const isValidMarket = twSDK.checkValidMarket();
-        const threadId = twSDK.getParameterByName('thread_id');
 
         const { villages } = await fetchWorldData();
 
@@ -209,7 +208,7 @@ $.getScript(
         }
 
         // Entry point
-        if (isValidScreen && threadId) {
+        if (isValidScreen) {
             try {
                 //build the user interface
                 buildUI();
