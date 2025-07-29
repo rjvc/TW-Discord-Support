@@ -178,60 +178,17 @@ var scriptConfig = {
     enableCountApi: true,
 };
 
-$.getScript(
-    `https://twscripts.dev/scripts/twSDK.js?url=${document.currentScript.src}`,
-    async function () {
-        // Initialize Library
+    $.getScript(`https://twscripts.dev/scripts/twSDK.js?url=${document.currentScript.src}`, async function () {
         await twSDK.init(scriptConfig);
-        const scriptInfo = twSDK.scriptInfo();
-        const isValidScreen = twSDK.checkValidLocation('screen');
-        const isValidMarket = twSDK.checkValidMarket();
 
-        const { villages } = await fetchWorldData();
+        const { villages } = await twSDK.worldDataAPI('village');
+        buildUI();
+        parseTextareaAndPopulate();
+        handleSendToDiscord();
+        handleCopyToClipboard();
+        handleReset();
+    });
 
-        // Check if we are on a valid market
-        if (!isValidMarket) {
-            UI.ErrorMessage(
-                twSDK.tt('Script is not allowed to be used on this TW market!')
-            );
-            return;
-        }
-
-        // Check if a configuration has been provided to the script
-        if (config === null) {
-            UI.ErrorMessage(
-                twSDK.tt(
-                    'You need to provide a configuration to run this script!'
-                )
-            );
-            return;
-        }
-
-        // Entry point
-        if (isValidScreen) {
-            try {
-                //build the user interface
-                buildUI();
-
-                // text select listener
-                handleOnTextSelect();
-
-                // handle user actions
-                handleSendToDiscord();
-                handleReset();
-            } catch (error) {
-                UI.ErrorMessage(twSDK.tt('There was an error!'));
-                console.error(`${scriptInfo} Error:`, error);
-            }
-        } else {
-            UI.ErrorMessage(
-                twSDK.tt(
-                    'This script can only be run on an in-game forum thread!'
-                )
-            );
-        }
-
-        // Render: Build the user interface
     function buildUI() {
         const content = `
         <div class="ra-mb15">
@@ -250,6 +207,7 @@ $.getScript(
         </div>
         <div class="ra-mb15">
             <a href="javascript:void(0);" id="raSendToDiscord" class="btn btn-disabled">${twSDK.tt('Send to Discord')}</a>
+            <a href="javascript:void(0);" id="raCopyToClipboard" class="btn">${twSDK.tt('Copy to Clipboard')}</a>
             <a href="javascript:void(0);" id="raResetBtn" class="btn">${twSDK.tt('Reset')}</a>
         </div>`;
 
@@ -257,469 +215,107 @@ $.getScript(
 
         twSDK.renderFixedWidget(content, 'raDiscordReqDefTool', 'ra-discord-reqdef-tool', style);
     }
-        // Event Handler: On text select event listener
-        function handleOnTextSelect() {
-            jQuery('.text').mouseup(async function (event) {
-                var selectedText = getSelectedText();
-                if (selectedText !== '') {
-                    if (
-                        selectedText.includes(
-                            twSDK.tt('Village:'),
-                            twSDK.tt('Noble')
-                        )
-                    ) {
-                        const villageUnderAttack =
-                            getVillageUnderAttack(selectedText);
-                        const trainInfo = parseTrainInfo(selectedText);
-                        const { wallLevel, loyalty, defendingTroops } =
-                            parseVillageInfo(selectedText);
-                        const [id, name, x, y] = villageUnderAttack;
-                        const incomingSupport = await fetchIncomingSupport(id);
 
-                        const villageName = `${name} (${x}|${y})`;
-                        const villageLink = `/game.php?screen=info_village&id=${id}`;
+    function parseTextareaAndPopulate() {
+        const selectedText = jQuery('#simple_message').val();
+        if (!selectedText) return;
 
-                        let defendingTroopsHtml = '';
-                        if (defendingTroops) {
-                            defendingTroops.forEach((item) => {
-                                const { unit, amountHome } = item;
-                                defendingTroopsHtml += `${amountHome} ${unit}, `;
-                            });
-                        }
+        const coordMatch = selectedText.match(/\[coord\](\d{3}\|\d{3})\[\/coord\]/);
+        const villageCoordinate = coordMatch ? coordMatch[1] : null;
+        if (!villageCoordinate) return UI.ErrorMessage(twSDK.tt('Selected text does not follow the required format!'));
 
-                        let incomingTroopsHtml = '';
-                        if (incomingSupport) {
-                            incomingSupport.forEach((item) => {
-                                const { unit, amount } = item;
-                                if (parseInt(amount) > 0) {
-                                    incomingTroopsHtml += `${amount} ${unit}, `;
-                                }
-                            });
-                        }
+        const { villages } = twSDK.worldData;
+        const villageUnderAttack = villages.find(v => `${v[2]}|${v[3]}` === villageCoordinate);
+        if (!villageUnderAttack) return UI.ErrorMessage('Village not found.');
 
-                        jQuery('#raSelectedText').val(trainInfo);
-                        jQuery('#raSendToDiscord').removeClass('btn-disabled');
-                        jQuery('#raSendToDiscord').attr(
-                            'data-village',
-                            JSON.stringify(villageUnderAttack)
-                        );
-                        jQuery('#raVillageInfo').html(`
-                        <a href="${villageLink}" target="_blank" rel="noreferrer nofollow noopener">
-                            ${villageName}
-                        </a>
-                    `);
-                        jQuery('#raWallLevel').text(wallLevel || 'N/A');
-                        jQuery('#raLoyalty').text(loyalty || 'N/A');
-                        jQuery('#raDefender').text(
-                            defendingTroopsHtml || 'N/A'
-                        );
-                        jQuery('#raIncomingSupport').text(
-                            incomingTroopsHtml || 'N/A'
-                        );
+        const [id, name, x, y] = villageUnderAttack;
+        const trainInfo = parseTrainInfo(selectedText);
+        const { wallLevel, loyalty, defendingTroops } = parseVillageInfo(selectedText);
 
-                        if (
-                            wallLevel === undefined &&
-                            loyalty === undefined &&
-                            defendingTroops === undefined
-                        ) {
-                            jQuery('#raResetBtn').trigger('click');
-                        }
-                    } else {
-                        jQuery('#raResetBtn').trigger('click');
-                        UI.ErrorMessage(
-                            twSDK.tt(
-                                'Selected text does not follow the required format!'
-                            )
-                        );
-                    }
-                }
-            });
-        }
-
-        // Action Handler: Send support request details on Discord
-        function handleSendToDiscord() {
-            jQuery('#raSendToDiscord').on('click', async function (e) {
-                e.preventDefault();
-
-                const supportText = jQuery('#raSelectedText').val();
-                const villageData = JSON.parse(
-                    jQuery(this).attr('data-village')
-                );
-
-                const [id, name, x, y] = villageData;
-                const villageName = `${name} (${x}|${y})`;
-                const villageLink = `${window.location.origin}/game.php?screen=info_village&id=${id}`;
-
-                if (supportText !== '' && id !== '') {
-                    const villageEffects = await fetchVillageEffects(id);
-
-                    const supportTextWithNoblesHighlighted = replaceGlobally(
-                        supportText,
-                        twSDK.tt('Noble'),
-                        `***${twSDK.tt('Noble')}***`
-                    );
-
-                    const { author, name, version } = scriptConfig.scriptData;
-                    let messageContent = `[${game_data.world}] - **${game_data.player.name}**`;
-
-                    // prepare body
-                    /*
-                    https://discord.com/developers/docs/resources/webhook
-                    https://discord.com/developers/docs/resources/channel#embed-object-embed-limits
-                    */
-                    const body = {
-                        username: twSDK.tt('TW SnipeBot'),
-                        avatar_url:
-                            'https://twscripts.dev/scripts/tribal-wars-icon.png',
-                        embeds: [
-                            {
-                                color: 12690020,
-                                timestamp: new Date(),
-                                title: `${messageContent} - ${villageName.substring(
-                                    0,
-                                    200
-                                )}`,
-                                url: villageLink,
-                                description:
-                                    '```yaml\n' +
-                                    supportTextWithNoblesHighlighted +
-                                    '```'.substring(0, 4096),
-                                fields: [
-                                    {
-                                        name: twSDK.tt('Wall Level'),
-                                        value:
-                                            jQuery('#raWallLevel')
-                                                .text()
-                                                .trim() ?? 'N/A',
-                                        inline: false,
-                                    },
-                                    {
-                                        name: twSDK.tt('Loyalty'),
-                                        value:
-                                            jQuery('#raLoyalty')
-                                                .text()
-                                                .trim() ?? 'N/A',
-                                        inline: false,
-                                    },
-                                    {
-                                        name: twSDK.tt('Sigil'),
-                                        value:
-                                            `${villageEffects.sigil}%` ?? 'N/A',
-                                        inline: false,
-                                    },
-                                    {
-                                        name: twSDK.tt('Flag'),
-                                        value: villageEffects.flag ?? 'N/A',
-                                        inline: false,
-                                    },
-                                    {
-                                        name: twSDK.tt('Defending Troops'),
-                                        value:
-                                            jQuery('#raDefender')
-                                                .text()
-                                                .trim() ?? 'N/A',
-                                        inline: false,
-                                    },
-                                    {
-                                        name: twSDK.tt('Incoming Support'),
-                                        value:
-                                            jQuery('#raIncomingSupport')
-                                                .text()
-                                                .trim() ?? 'N/A',
-                                        inline: false,
-                                    },
-                                ],
-                                footer: {
-                                    text: `${name} ${version} - ${author}`,
-                                    icon_url:
-                                        'https://twscripts.dev/scripts/tribal-wars-icon.png',
-                                },
-                            },
-                        ],
-                    };
-
-                    // send the data to discord
-                    sendData(config.webhookURL, body);
-
-                    // reset the data after being sent
-                    setTimeout(function () {
-                        jQuery('#raResetBtn').trigger('click');
-                    }, 500);
-                } else {
-                    UI.ErrorMessage(twSDK.tt('Invalid input!'));
-                }
-            });
-        }
-
-        // Action Handler: Reset form with data to be sent to Discord
-        function handleReset() {
-            jQuery('#raResetBtn').on('click', function (e) {
-                e.preventDefault();
-
-                jQuery('#raSelectedText').val('');
-                jQuery('#raSendToDiscord').addClass('btn-disabled');
-                jQuery('#raSendToDiscord').attr('data-village', '');
-                jQuery('#raVillageInfo').html('');
-                jQuery('#raWallLevel').text('');
-                jQuery('#raLoyalty').text('');
-                jQuery('#raDefender').text('');
-                jQuery('#raIncomingSupport').text('');
-
-                window.getSelection().removeAllRanges();
-            });
-        }
-
-        // Service: Send data to Discord
-        function sendData(url, body) {
-            return $.ajax({
-                url: url,
-                async: false,
-                type: 'POST',
-                contentType: 'application/json; charset=utf-8',
-                data: JSON.stringify(body),
-            });
-        }
-
-        // Helper: Fetch village info
-        async function fetchVillageEffects(villageId) {
-            try {
-                const villageEffects = await jQuery
-                    .get(`/game.php?village=${villageId}&screen=overview`)
-                    .then((response) => {
-                        const parser = new DOMParser();
-                        const htmlDoc = parser.parseFromString(
-                            response,
-                            'text/html'
-                        );
-
-                        const tableRows = jQuery(htmlDoc).find(
-                            '#show_effects .widget_content .village_overview_effect'
-                        );
-
-                        if (tableRows.length) {
-                            let effects = {
-                                sigil: 0,
-                                flag: null,
-                            };
-
-                            tableRows.each(function () {
-                                let dataTitle = jQuery(this)
-                                    .attr('title')
-                                    ?.trim();
-                                let tdText = jQuery(this).text()?.trim();
-
-                                if (dataTitle) {
-                                    if (
-                                        tdText.includes(
-                                            twSDK.tt('Sigil of Distress')
-                                        )
-                                    ) {
-                                        dataTitle = dataTitle.split('<i>')[1];
-                                        dataTitle = dataTitle.split('</i>')[0];
-                                        dataTitle = dataTitle.split(' ');
-                                        dataTitle = dataTitle
-                                            .map((item) => parseInt(item))
-                                            .filter((item) => item >= 0);
-                                        effects = {
-                                            ...effects,
-                                            sigil: dataTitle[0],
-                                        };
-                                    }
-                                } else {
-                                    effects = {
-                                        ...effects,
-                                        flag: tdText,
-                                    };
-                                }
-                            });
-
-                            return effects;
-                        } else {
-                            return {};
-                        }
-                    });
-
-                return villageEffects;
-            } catch (error) {
-                UI.ErrorMessage(
-                    twSDK.tt('There was an error fetching village info!')
-                );
-                console.error(`${scriptInfo} Error: `, error);
-            }
-        }
-
-        // Helper: Get selected text value
-        function getSelectedText() {
-            if (window.getSelection) {
-                return window.getSelection().toString();
-            } else if (document.selection) {
-                return document.selection.createRange().text;
-            }
-            return '';
-        }
-
-        // Helper: Parse train info from selected text
-        function parseTrainInfo(selectedText) {
-            if (!selectedText.includes(twSDK.tt('Noble'))) {
-                return '';
-            } else {
-                let linesOfText = selectedText.split('\n');
-
-                linesOfText = linesOfText.filter((line) => line !== ''); // remove empty lines
-                linesOfText = linesOfText.filter(
-                    (line) => !line.includes(twSDK.tt('Village:'))
-                ); // remove village info
-                linesOfText = linesOfText.filter(
-                    (line) => !line.includes(twSDK.tt('Wall level:'))
-                ); // remove wall level info
-                linesOfText = linesOfText.filter(
-                    (line) => !line.includes(twSDK.tt('Loyalty:'))
-                ); // remove loyalty info
-                linesOfText = linesOfText.filter(
-                    (line) => !line.includes(twSDK.tt('Defender:'))
-                ); // remove defender info
-
-                linesOfText = linesOfText.map((line) => line.trim());
-
-                if (linesOfText && linesOfText.length) {
-                    return linesOfText.join('\n');
-                } else {
-                    return '';
-                }
-            }
-        }
-
-        // Helper: Parse village info from selected text
-        function parseVillageInfo(selectedText) {
-            if (!selectedText.includes(twSDK.tt('Noble'))) {
-                UI.ErrorMessage(
-                    twSDK.tt(
-                        'No noble incomings found on the selected incomings!'
-                    )
-                );
-                return {};
-            } else {
-                let linesOfText = selectedText.split('\n');
-
-                linesOfText = linesOfText.filter((line) => line !== ''); // remove empty lines
-
-                linesOfText = linesOfText.filter(
-                    (line) =>
-                        line.includes(twSDK.tt('Wall level:')) ||
-                        line.includes(twSDK.tt('Loyalty:')) ||
-                        line.includes(twSDK.tt('Defender:'))
-                );
-
-                let villageInfo = {
-                    wallLevel: '',
-                    loyalty: '',
-                    defendingTroops: [],
-                };
-
-                linesOfText.map((item) => {
-                    if (item.includes(twSDK.tt('Wall level:'))) {
-                        villageInfo.wallLevel = parseInt(
-                            item.replace(twSDK.tt('Wall level:'), '')
-                        );
-                    } else if (item.includes(twSDK.tt('Loyalty:'))) {
-                        villageInfo.loyalty = parseInt(
-                            item.replace(twSDK.tt('Loyalty:'), '')
-                        );
-                    } else if (item.includes(twSDK.tt('Defender:'))) {
-                        let defenderTroops = item.split(' ');
-                        defenderTroops = defenderTroops
-                            .map((item) => parseInt(item))
-                            .filter((item) => item >= 0);
-
-                        const defendingTroops = [];
-                        game_data.units.forEach((unit, index) => {
-                            if (parseInt(defenderTroops[index]) !== 0) {
-                                defendingTroops.push({
-                                    unit: [unit],
-                                    amountHome: defenderTroops[index],
-                                });
-                            }
-                        });
-
-                        villageInfo = {
-                            ...villageInfo,
-                            defendingTroops: defendingTroops,
-                        };
-                    }
-                });
-
-                return villageInfo;
-            }
-        }
-
-        // Helper: Get village under attack from selected text
-        function getVillageUnderAttack(selectedText) {
-            const linesOfText = selectedText.split('\n');
-            const villageCoordinate = linesOfText[0].match(
-                twSDK.coordsRegex
-            )[0]; // returns 111|222
-
-            const villageUnderAttack = villages.filter((village) => {
-                const villageCoord = village[2] + '|' + village[3];
-                return villageCoord === villageCoordinate;
-            })[0];
-
-            return villageUnderAttack;
-        }
-
-        // Helper: Globally replace a string within a string
-        function replaceGlobally(original, searchTxt, replaceTxt) {
-            const regex = new RegExp(searchTxt, 'g');
-            return original.replace(regex, replaceTxt);
-        }
-
-        // Fetch incomings information for village
-        async function fetchIncomingSupport(villageId) {
-            try {
-                const response = await jQuery.get(
-                    `/game.php?village=${villageId}&screen=place&mode=call&target=${villageId}`
-                );
-                const htmlDoc = jQuery.parseHTML(response);
-                const troopsRows = jQuery(htmlDoc).find(
-                    '#support_sum tbody tr'
-                );
-
-                const troopsInVillage = [];
-                game_data.units.forEach((unit) => {
-                    troopsRows.each(function () {
-                        const unitAmount = jQuery(this)
-                            .find(`td[data-unit="${unit}"]`)
-                            .text()
-                            .trim();
-                        if (unitAmount) {
-                            troopsInVillage.push({
-                                unit: unit,
-                                amount: parseInt(unitAmount),
-                            });
-                        }
-                    });
-                });
-
-                return troopsInVillage;
-            } catch (error) {
-                UI.ErrorMessage(
-                    twSDK.tt(
-                        'There was an error fetching incomings information!'
-                    )
-                );
-                console.error(`${scriptInfo} Error: `, error);
-            }
-        }
-
-        // Helper: Fetch all required world data
-        async function fetchWorldData() {
-            try {
-                const villages = await twSDK.worldDataAPI('village');
-                return { villages };
-            } catch (error) {
-                UI.ErrorMessage(error);
-                console.error(`${scriptInfo} Error:`, error);
-            }
-        }
+        jQuery('#raSelectedText').val(trainInfo);
+        jQuery('#raSendToDiscord').removeClass('btn-disabled');
+        jQuery('#raSendToDiscord').attr('data-village', JSON.stringify(villageUnderAttack));
+        jQuery('#raVillageInfo').html(`<a href="/game.php?screen=info_village&id=${id}" target="_blank">${name} (${x}|${y})</a>`);
+        jQuery('#raWallLevel').text(wallLevel || 'N/A');
+        jQuery('#raLoyalty').text(loyalty || 'N/A');
+        jQuery('#raDefender').text(defendingTroops || 'N/A');
     }
-);
+
+    function parseTrainInfo(text) {
+        const lines = text.split('\n').filter(line =>
+            line.includes('[command]attack[/command]')
+        );
+        return lines.join('\n');
+    }
+
+    function parseVillageInfo(text) {
+        const wallMatch = text.match(/\[b\]Nível da muralha:\[\/b\]\s*(\d+)/);
+        const loyaltyMatch = text.match(/\[b\]Lealdade:\[\/b\]\s*(\d+)/);
+        const defenderMatch = text.match(/\[b\]Defensor:\[\/b\](.*)/);
+
+        return {
+            wallLevel: wallMatch ? parseInt(wallMatch[1]) : 'N/A',
+            loyalty: loyaltyMatch ? parseInt(loyaltyMatch[1]) : 'N/A',
+            defendingTroops: defenderMatch ? defenderMatch[1].trim() : 'N/A'
+        };
+    }
+
+    function handleSendToDiscord() {
+        jQuery('#raSendToDiscord').on('click', function () {
+            const supportText = jQuery('#raSelectedText').val();
+            const villageData = JSON.parse(jQuery(this).attr('data-village'));
+            const [id, name, x, y] = villageData;
+
+            const content = '```bbcode\n' + supportText + '\n```';
+            const embed = {
+                title: `${name} (${x}|${y})`,
+                url: `/game.php?screen=info_village&id=${id}`,
+                fields: [
+                    { name: twSDK.tt('Wall level:'), value: jQuery('#raWallLevel').text(), inline: false },
+                    { name: twSDK.tt('Loyalty:'), value: jQuery('#raLoyalty').text(), inline: false },
+                    { name: twSDK.tt('Defender:'), value: jQuery('#raDefender').text(), inline: false },
+                ],
+            };
+
+            const body = {
+                username: 'TW ReqDef Tool',
+                content: content,
+                embeds: [embed],
+            };
+
+            if (config?.webhookURL) {
+                $.ajax({
+                    url: config.webhookURL,
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(body),
+                });
+            }
+        });
+    }
+
+    function handleCopyToClipboard() {
+        jQuery('#raCopyToClipboard').on('click', function () {
+            const supportText = jQuery('#raSelectedText').val();
+            const villageTitle = jQuery('#raVillageInfo').text();
+            const wall = jQuery('#raWallLevel').text();
+            const loyalty = jQuery('#raLoyalty').text();
+            const defender = jQuery('#raDefender').text();
+
+            const copyText = `**${villageTitle}**\nWall: ${wall}\nLoyalty: ${loyalty}\nDefender: ${defender}\n\n\`\`\`bbcode\n${supportText}\n\`\`\``;
+
+            navigator.clipboard.writeText(copyText).then(() => {
+                UI.SuccessMessage('Copied to clipboard!');
+            });
+        });
+    }
+
+    function handleReset() {
+        jQuery('#raResetBtn').on('click', function () {
+            jQuery('#raSelectedText').val('');
+            jQuery('#raSendToDiscord').addClass('btn-disabled');
+            jQuery('#raVillageInfo, #raWallLevel, #raLoyalty, #raDefender').text('');
+        });
+    }
+})();
+
