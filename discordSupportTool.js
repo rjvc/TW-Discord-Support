@@ -317,5 +317,4 @@ var scriptConfig = {
             jQuery('#raVillageInfo, #raWallLevel, #raLoyalty, #raDefender').text('');
         });
     }
-})();
-
+)();
